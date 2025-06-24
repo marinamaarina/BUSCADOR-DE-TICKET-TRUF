@@ -1,32 +1,44 @@
+import streamlit as st
 import pandas as pd
 
-# 1. Carrega a planilha
-arquivo = "tickets.xlsx"  # troque pelo nome do seu arquivo
-df = pd.read_excel(arquivo)  # ou use pd.read_csv se for .csv
+st.set_page_config(page_title="Análise de Tickets", layout="centered")
 
-# 2. Exibe colunas disponíveis
-print("Colunas disponíveis:", df.columns.tolist())
+st.title("🎫 Analisador de Tickets")
 
-# 3. Filtra IDEAL e NÃO IDEAL
-filtro_ideal = df[df['Análise'] == 'IDEAL']
-filtro_nao_ideal = df[df['Análise'] == 'NÃO IDEAL']
+# Upload do arquivo Excel
+arquivo = st.file_uploader("📤 Envie sua planilha (.xlsx ou .csv)", type=["xlsx", "csv"])
 
-# 4. Filtra por tipo (exemplo: “Liveness”)
-tipo_especifico = "Liveness"
-filtro_tipo = df[df['Tipo'] == tipo_especifico]
+if arquivo:
+    # Carrega os dados
+    if arquivo.name.endswith('.csv'):
+        df = pd.read_csv(arquivo)
+    else:
+        df = pd.read_excel(arquivo)
 
-# 5. (Opcional) Filtrar por tipo + análise juntos
-filtro_tipo_e_ideal = df[(df['Tipo'] == tipo_especifico) & (df['Análise'] == 'IDEAL')]
+    # Exibe prévia
+    st.subheader("🔍 Visualização da Tabela")
+    st.dataframe(df.head())
 
-# 6. Mostrar os resultados
-print("\n🔹 Tickets IDEAL:")
-print(filtro_ideal)
+    # Verifica se colunas esperadas existem
+    colunas_necessarias = ['Tipo', 'Análise']
+    if all(col in df.columns for col in colunas_necessarias):
+        
+        # Filtros
+        tipos_disponiveis = df['Tipo'].dropna().unique()
+        analises_disponiveis = df['Análise'].dropna().unique()
 
-print("\n🔹 Tickets NÃO IDEAL:")
-print(filtro_nao_ideal)
+        tipo_escolhido = st.selectbox("📌 Escolha o tipo de ticket:", tipos_disponiveis)
+        analise_escolhida = st.selectbox("✅ Escolha o tipo de análise:", analises_disponiveis)
 
-print(f"\n🔹 Tickets do tipo '{tipo_especifico}':")
-print(filtro_tipo)
+        # Aplica o filtro
+        filtro = df[(df['Tipo'] == tipo_escolhido) & (df['Análise'] == analise_escolhida)]
 
-print(f"\n🔹 Tickets do tipo '{tipo_especifico}' e IDEAL:")
-print(filtro_tipo_e_ideal)
+        st.subheader(f"📊 Resultados filtrados: {len(filtro)} linhas")
+        st.dataframe(filtro)
+
+        # Exportar como Excel
+        csv_export = filtro.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Baixar resultados filtrados (CSV)", data=csv_export, file_name="filtro_tickets.csv", mime="text/csv")
+    else:
+        st.warning("⚠️ A planilha precisa ter as colunas 'Tipo' e 'Análise'.")
+
