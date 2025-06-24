@@ -1,75 +1,38 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
-st.set_page_config(page_title="Análise de Tickets", layout="wide")
-st.title("📊 Dashboard Interativo de Análise de Tickets")
+st.title("Análise e Filtro de Tickets")
 
-# Upload do arquivo Excel
-arquivo = st.file_uploader("📎 Envie seu arquivo Excel com os dados", type=["xlsx"])
+# Upload do arquivo CSV
+uploaded_file = st.file_uploader("Envie o arquivo CSV com os tickets", type=["csv"])
 
-if arquivo:
-    # Leitura do Excel
-    df = pd.read_excel(arquivo, sheet_name="Dados")
-    df.columns = df.columns.str.strip()  # limpa os nomes das colunas
+if uploaded_file is not None:
+    # Lendo o CSV para DataFrame
+    df = pd.read_csv(uploaded_file)
 
-    st.sidebar.header("🔎 Filtros Interativos")
-
-    # 🔍 Campo de busca livre para filtrar a coluna "Análise"
-    analise_busca = st.sidebar.text_input(
-        "Buscar Análise (ex: ideal, não)", value=""
-    ).strip().upper()
-
-    # Filtra a coluna "Análise" por texto
-    df_busca = df[df["Análise"].str.upper().str.contains(analise_busca)] if analise_busca else df
-
-    # 🎯 Tipos disponíveis com base na busca de Análise
-    tipos_disponiveis = df_busca["Tipo"].unique()
-    tipo_selecionado = st.sidebar.multiselect(
-        "Filtrar por Tipos",
-        options=sorted(tipos_disponiveis),
-        default=sorted(tipos_disponiveis)
-    )
-
-    # 📌 Filtro final
-    df_filtrado = df_busca[df_busca["Tipo"].isin(tipo_selecionado)]
-
-    # 🧠 Insight automático
-    st.subheader("🧠 Insight Inteligente")
-    if not df_filtrado.empty:
-        tipo_top = df_filtrado["Tipo"].value_counts().idxmax()
-        qtde_top = df_filtrado["Tipo"].value_counts().max()
-        total_filtrado = len(df_filtrado)
-        percentual = (qtde_top / total_filtrado) * 100
-        st.info(f"⚠️ O tipo **{tipo_top}** representa **{percentual:.1f}%** dos tickets filtrados.")
+    # Verifica se as colunas necessárias existem
+    col_necessarias = ["Ticket", "Tipo", "Análise"]
+    if not all(col in df.columns for col in col_necessarias):
+        st.error(f"O arquivo precisa conter as colunas: {', '.join(col_necessarias)}")
     else:
-        st.warning("Nenhum dado encontrado com os filtros atuais.")
+        st.write("### Visualização dos dados originais")
+        st.dataframe(df)
 
-    # 📊 Métricas
-    col1, col2 = st.columns(2)
-    col1.metric("Tickets Filtrados", len(df_filtrado))
-    col2.metric("Tipos Únicos", df_filtrado["Tipo"].nunique())
+        # Criar filtros dinâmicos para Tipo e Análise
+        tipos = df['Tipo'].dropna().unique().tolist()
+        analises = df['Análise'].dropna().unique().tolist()
 
-    # 📈 Gráficos
-    if not df_filtrado.empty:
-        st.subheader("📊 Distribuição por Tipo")
-        fig_pizza = px.pie(df_filtrado, names="Tipo", title="Participação dos Tipos", hole=0.4)
-        st.plotly_chart(fig_pizza, use_container_width=True)
+        tipo_selecionado = st.multiselect("Filtrar por Tipo", tipos, default=tipos)
+        analise_selecionada = st.multiselect("Filtrar por Análise", analises, default=analises)
 
-        st.subheader("📈 Frequência por Tipo")
-        fig_bar = px.bar(
-            df_filtrado["Tipo"].value_counts().reset_index(),
-            x="index", y="Tipo",
-            labels={"index": "Tipo", "Tipo": "Quantidade"},
-            title="Tickets por Tipo",
-            color="index"
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        # Filtrar dados
+        df_filtrado = df[
+            (df['Tipo'].isin(tipo_selecionado)) & 
+            (df['Análise'].isin(analise_selecionada))
+        ]
 
-    # 📄 Tabela de dados
-    st.subheader("📄 Tabela com Dados Filtrados")
-    st.dataframe(df_filtrado, use_container_width=True)
-
+        st.write(f"### Tickets filtrados ({len(df_filtrado)})")
+        st.dataframe(df_filtrado)
 else:
-    st.warning("⚠️ Envie o arquivo Excel para iniciar a análise.")
+    st.info("Por favor, envie o arquivo CSV para começar.")
 
