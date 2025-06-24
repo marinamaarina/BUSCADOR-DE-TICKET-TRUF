@@ -1,32 +1,42 @@
 import streamlit as st
 import pandas as pd
-from fuzzywuzzy import fuzz, process
+import plotly.express as px
+from thefuzz import fuzz, process
 
-st.set_page_config(page_title="Análise de Tickets", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Dashboard de Tickets", layout="wide", page_icon="📊")
 
-# Configuração de estilo
+# Estilo CSS personalizado
 st.markdown("""
     <style>
-        .stSelectbox, .stTextInput, .stMultiSelect {
-            margin-bottom: 1rem;
+        .card {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .stDataFrame {
-            border: 1px solid #e1e4e8;
+        .metric-card {
+            background-color: #ffffff;
+            border-left: 4px solid #4e73df;
             border-radius: 5px;
+            padding: 15px;
+            margin: 5px;
         }
-        .css-1aumxhk {
-            background-color: #f0f2f6;
+        .header {
+            color: #2e59a7;
         }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🔍 Buscador Inteligente de Tickets")
+# Título do dashboard
+st.markdown("<h1 class='header'>📊 Dashboard de Análise de Tickets</h1>", unsafe_allow_html=True)
 
-# Upload do arquivo Excel
-arquivo = st.file_uploader("📤 Envie sua planilha (.xlsx ou .csv)", type=["xlsx", "csv"], help="Planilha deve conter colunas 'Tipo' e 'Análise'")
+# Upload do arquivo
+uploaded_file = st.file_uploader("Carregue seu arquivo de tickets (CSV ou Excel)", type=["csv", "xlsx"])
 
-if arquivo:
-    # Carrega os dados com cache para melhor performance
+if uploaded_file:
+    # Carregar dados
     @st.cache_data
     def load_data(file):
         if file.name.endswith('.csv'):
@@ -34,92 +44,100 @@ if arquivo:
         else:
             return pd.read_excel(file)
     
-    df = load_data(arquivo)
+    df = load_data(uploaded_file)
 
-    # Exibe prévia com abas
-    preview_tab, stats_tab = st.tabs(["📋 Prévia dos Dados", "📊 Estatísticas"])
-    
-    with preview_tab:
-        st.dataframe(df.head(), use_container_width=True)
-    
-    with stats_tab:
-        st.write(f"Total de registros: {len(df)}")
-        if 'Tipo' in df.columns:
-            st.write("Distribuição por Tipo:")
-            st.bar_chart(df['Tipo'].value_counts())
-        if 'Análise' in df.columns:
-            st.write("Distribuição por Análise:")
-            st.bar_chart(df['Análise'].value_counts())
-
-    # Verifica se colunas esperadas existem
-    colunas_necessarias = ['Tipo', 'Análise']
-    if all(col in df.columns for col in colunas_necessarias):
-        
-        # Sidebar para filtros avançados
+    # Verificar colunas necessárias
+    if all(col in df.columns for col in ['Tipo', 'Análise']):
+        # Sidebar com filtros
         with st.sidebar:
-            st.header("🔎 Filtros Avançados")
+            st.header("🔍 Filtros Avançados")
             
-            # Busca fuzzy para tipos
-            tipos_disponiveis = df['Tipo'].dropna().unique()
-            tipo_pesquisa = st.text_input("Pesquisar Tipo:")
-            if tipo_pesquisa:
-                matches = process.extract(tipo_pesquisa, tipos_disponiveis, scorer=fuzz.token_set_ratio, limit=5)
+            # Campo de busca para Tipo
+            tipo_search = st.text_input("Buscar por Tipo:")
+            tipos = df['Tipo'].dropna().unique()
+            
+            if tipo_search:
+                matches = process.extract(tipo_search, tipos, scorer=fuzz.token_set_ratio, limit=5)
                 tipos_filtrados = [match[0] for match in matches]
             else:
-                tipos_filtrados = tipos_disponiveis
+                tipos_filtrados = tipos
             
-            tipo_escolhido = st.selectbox("Selecione o Tipo:", tipos_filtrados)
+            tipo_selecionado = st.selectbox("Selecione o Tipo:", tipos_filtrados)
             
-            # Busca fuzzy para análises
-            analises_disponiveis = df['Análise'].dropna().unique()
-            analise_pesquisa = st.text_input("Pesquisar Análise:")
-            if analise_pesquisa:
-                matches = process.extract(analise_pesquisa, analises_disponiveis, scorer=fuzz.token_set_ratio, limit=5)
+            # Campo de busca para Análise
+            analise_search = st.text_input("Buscar por Análise:")
+            analises = df['Análise'].dropna().unique()
+            
+            if analise_search:
+                matches = process.extract(analise_search, analises, scorer=fuzz.token_set_ratio, limit=5)
                 analises_filtradas = [match[0] for match in matches]
             else:
-                analises_filtradas = analises_disponiveis
+                analises_filtradas = analises
             
-            analise_escolhida = st.selectbox("Selecione a Análise:", analises_filtradas)
-            
-            # Filtros adicionais
-            outras_colunas = [col for col in df.columns if col not in colunas_necessarias]
-            coluna_filtro_extra = st.selectbox("Filtrar por outra coluna:", ['Nenhum'] + outras_colunas)
-            
-            if coluna_filtro_extra != 'Nenhum':
-                valores_filtro = df[coluna_filtro_extra].dropna().unique()
-                valor_selecionado = st.selectbox(f"Selecione {coluna_filtro_extra}:", valores_filtro)
+            analise_selecionada = st.selectbox("Selecione a Análise:", analises_filtradas)
         
-        # Aplica o filtro
-        filtro = df[(df['Tipo'] == tipo_escolhido) & (df['Análise'] == analise_escolhida)]
+        # Aplicar filtros
+        filtered_df = df[(df['Tipo'] == tipo_selecionado) & (df['Análise'] == analise_selecionada)]
         
-        if coluna_filtro_extra != 'Nenhum':
-            filtro = filtro[filtro[coluna_filtro_extra] == valor_selecionado]
-        
-        # Exibe resultados
-        st.subheader(f"🎯 Resultados Encontrados: {len(filtro)} registros")
-        
-        # Mostra métricas rápidas
+        # Seção de métricas
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Registros", len(filtro))
-        if 'Data' in filtro.columns:
-            col2.metric("Período", f"{filtro['Data'].min().date()} a {filtro['Data'].max().date()}")
+        with col1:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Total de Tickets</h3>
+                    <h2>{len(filtered_df)}</h2>
+                </div>
+            """, unsafe_allow_html=True)
         
-        # Visualização dos dados
-        st.dataframe(filtro, use_container_width=True)
+        with col2:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Tipo Selecionado</h3>
+                    <h2>{tipo_selecionado}</h2>
+                </div>
+            """, unsafe_allow_html=True)
         
-        # Opções de exportação
-        export_col1, export_col2 = st.columns(2)
+        with col3:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Análise Selecionada</h3>
+                    <h2>{analise_selecionada}</h2>
+                </div>
+            """, unsafe_allow_html=True)
         
-        with export_col1:
-            csv_export = filtro.to_csv(index=False).encode('utf-8')
-            st.download_button("⬇️ Baixar como CSV", data=csv_export, 
-                             file_name="filtro_tickets.csv", mime="text/csv")
+        # Gráficos
+        tab1, tab2, tab3 = st.tabs(["📊 Distribuição", "📈 Tendência", "🔍 Dados"])
         
-        with export_col2:
-            excel_export = filtro.to_excel(index=False)
-            st.download_button("⬇️ Baixar como Excel", data=excel_export, 
-                             file_name="filtro_tickets.xlsx", mime="application/vnd.ms-excel")
+        with tab1:
+            if 'Data' in df.columns:
+                fig = px.histogram(filtered_df, x='Data', title=f"Distribuição por Data - {tipo_selecionado}")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                fig = px.pie(filtered_df, names='Status', title=f"Distribuição por Status - {tipo_selecionado}")
+                st.plotly_chart(fig, use_container_width=True)
         
+        with tab2:
+            if 'Data' in df.columns and 'Quantidade' in df.columns:
+                fig = px.line(filtered_df, x='Data', y='Quantidade', title=f"Tendência - {tipo_selecionado}")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Dados insuficientes para mostrar tendência temporal")
+        
+        with tab3:
+            st.dataframe(filtered_df, use_container_width=True)
+        
+        # Botão de download
+        csv = filtered_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="⬇️ Baixar dados filtrados (CSV)",
+            data=csv,
+            file_name=f"tickets_{tipo_selecionado}_{analise_selecionada}.csv",
+            mime="text/csv"
+        )
+    
     else:
-        st.warning("⚠️ A planilha precisa ter as colunas 'Tipo' e 'Análise'.")
+        st.error("O arquivo precisa conter as colunas 'Tipo' e 'Análise'")
+else:
+    st.info("Por favor, carregue um arquivo para começar a análise")
+
 
