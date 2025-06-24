@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 st.set_page_config(page_title="Dashboard de Tickets", layout="wide")
 st.title("📊 Dashboard Interativo para Análise de Tickets")
@@ -9,7 +9,6 @@ st.markdown("""
 Envie seu arquivo CSV e use os filtros para explorar os tickets rapidamente.
 """)
 
-# Layout em 2 colunas: esquerda maior para gráficos, direita menor para controles
 col_esq, col_dir = st.columns([3,1])
 
 with col_dir:
@@ -24,10 +23,8 @@ with col_dir:
         else:
             st.markdown("### 🔍 Filtros e Busca")
             
-            # Campo de busca por ticket
             busca_ticket = st.text_input("Pesquisar Ticket (ID):", "")
             
-            # Filtros para Tipo e Análise
             tipos = df['Tipo'].dropna().unique().tolist()
             analises = df['Análise'].dropna().unique().tolist()
 
@@ -42,7 +39,6 @@ with col_dir:
                 default=analises
             )
             
-            # Aplicar filtros e busca
             df_filtrado = df[
                 (df['Tipo'].isin(tipo_selecionado)) & 
                 (df['Análise'].isin(analise_selecionada))
@@ -58,7 +54,7 @@ with col_dir:
 
 with col_esq:
     if uploaded_file and 'df_filtrado' in locals():
-        st.markdown("## 📈 Estatísticas e Gráficos")
+        st.markdown("## 📈 Estatísticas e Gráfico de Classificação")
 
         total_tickets = len(df_filtrado)
         ideal_count = len(df_filtrado[df_filtrado['Análise'] == 'IDEAL'])
@@ -69,33 +65,25 @@ with col_esq:
         c2.metric("Tickets IDEAL", ideal_count, delta=f"{(ideal_count / total_tickets * 100 if total_tickets else 0):.1f}%")
         c3.metric("Tickets NÃO IDEAL", nao_ideal_count, delta=f"{(nao_ideal_count / total_tickets * 100 if total_tickets else 0):.1f}%")
 
-        st.markdown("### 📊 Tickets por Tipo")
-        tipo_counts = df_filtrado['Tipo'].value_counts()
+        st.markdown("### 🥧 Proporção de Tickets IDEAL vs NÃO IDEAL")
 
-        fig1, ax1 = plt.subplots()
-        tipo_counts.plot(kind='bar', ax=ax1, color='cornflowerblue')
-        ax1.set_xlabel("Tipo")
-        ax1.set_ylabel("Quantidade")
-        ax1.set_title("Quantidade de Tickets por Tipo")
-        ax1.grid(axis='y', linestyle='--', alpha=0.7)
-        st.pyplot(fig1)
+        analise_counts = df_filtrado['Análise'].value_counts().reset_index()
+        analise_counts.columns = ['Análise', 'Quantidade']
 
-        st.markdown("### 🥧 Proporção de Análise")
-        analise_counts = df_filtrado['Análise'].value_counts()
-
-        fig2, ax2 = plt.subplots()
-        colors = ['#4CAF50', '#F44336']
-        ax2.pie(
+        fig = px.pie(
             analise_counts, 
-            labels=analise_counts.index, 
-            autopct='%1.1f%%', 
-            startangle=140, 
-            colors=colors, 
-            textprops={'fontsize': 12}
+            values='Quantidade', 
+            names='Análise', 
+            color='Análise',
+            color_discrete_map={'IDEAL':'#4CAF50', 'NÃO IDEAL':'#F44336'},
+            hole=0.4,
+            title="Proporção IDEAL x NÃO IDEAL"
         )
-        ax2.axis('equal')
-        st.pyplot(fig2)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_layout(margin=dict(t=40, b=40, l=40, r=40), height=350)
+
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.markdown("⚠️ Faça o upload de um arquivo CSV válido para visualizar estatísticas e gráficos.")
+        st.markdown("⚠️ Faça o upload de um arquivo CSV válido para visualizar estatísticas e gráfico.")
 
 
