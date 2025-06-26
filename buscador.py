@@ -1,109 +1,54 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
+# Configuração da página
 st.set_page_config(page_title="Dashboard de Tickets", layout="wide")
-st.title("📊 Dashboard Interativo para Análise de Tickets")
 
-st.markdown("""
-Envie seu arquivo CSV e use os filtros para explorar os tickets rapidamente.
-""")
+# Título
+st.markdown("## 🧾 Dashboard de Tickets")
+st.markdown("Antes de começar, envie o arquivo `.csv` com os dados dos tickets.")
 
-col_esq, col_dir = st.columns([4, 1])  # Dashboard maior
+# Upload do arquivo
+arquivo = st.file_uploader("📁 Envie o arquivo CSV aqui", type="csv")
 
-with col_dir:
-    uploaded_file = st.file_uploader("⬆️ Envie seu arquivo CSV aqui", type=["csv"])
+if arquivo is not None:
+    # Carregar dados
+    df = pd.read_csv(arquivo)
 
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+    # 🧼 Normaliza os dados da coluna 'Análise'
+    df["Análise"] = df["Análise"].astype(str).str.strip().str.upper()
 
-        col_necessarias = ["Ticket", "Tipo", "Análise"]
-        if not all(col in df.columns for col in col_necessarias):
-            st.error(f"⚠️ O arquivo precisa conter as colunas: {', '.join(col_necessarias)}")
-        else:
-            # Limpar espaços e padronizar caixa
-            df['Análise'] = df['Análise'].astype(str).str.strip().str.upper()
-            df['Tipo'] = df['Tipo'].astype(str).str.strip()
-            df['Ticket'] = df['Ticket'].astype(str).str.strip()
+    # Interface de filtros
+    col1, col2, col3 = st.columns([2, 2, 2])
+    with col1:
+        ticket_busca = st.text_input("🔍 Buscar por código do Ticket")
+    with col2:
+        tipo_selecionado = st.selectbox("📂 Filtrar por Tipo:", ["Todos"] + sorted(df["Tipo"].dropna().unique()))
+    with col3:
+        analise_selecionada = st.radio("⚙️ Filtrar por Análise:", ["Todos", "IDEAL", "NÃO IDEAL"], horizontal=True)
 
-            st.markdown("### 🔍 Filtros e Busca")
+    # Aplicar filtros
+    df_filtrado = df.copy()
+    if ticket_busca:
+        df_filtrado = df_filtrado[df_filtrado["Ticket"].str.contains(ticket_busca, case=False, na=False)]
+    if tipo_selecionado != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Tipo"] == tipo_selecionado]
+    if analise_selecionada != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Análise"] == analise_selecionada]
 
-            busca_ticket = st.text_input("Pesquisar Ticket (ID):", "")
+    # Métricas
+    col4, col5, col6 = st.columns(3)
+    col4.metric("📊 Total de Tickets", len(df_filtrado))
+    col5.metric("✅ IDEAL", (df_filtrado["Análise"] == "IDEAL").sum())
+    col6.metric("❌ NÃO IDEAL", (df_filtrado["Análise"] == "NÃO IDEAL").sum())
 
-            tipos = df['Tipo'].dropna().unique().tolist()
-            analises = df['Análise'].dropna().unique().tolist()
+    # Exibição da tabela
+    st.markdown("---")
+    st.subheader("📋 Resultados filtrados")
+    st.dataframe(df_filtrado, use_container_width=True)
 
-            tipo_selecionado = st.multiselect(
-                "Filtrar por Tipo:",
-                options=tipos,
-                default=tipos
-            )
-            analise_selecionada = st.multiselect(
-                "Filtrar por Análise:",
-                options=analises,
-                default=analises
-            )
-
-            # Aplicar filtros
-            df_filtrado = df[
-                (df['Tipo'].isin(tipo_selecionado)) &
-                (df['Análise'].isin(analise_selecionada))
-            ]
-
-            # Filtro busca ticket (case insensitive)
-            if busca_ticket.strip():
-                df_filtrado = df_filtrado[df_filtrado['Ticket'].str.contains(busca_ticket.strip(), case=False)]
-
-            st.markdown(f"### Tickets encontrados: {len(df_filtrado)}")
-
-            st.dataframe(df_filtrado)
-
-    else:
-        st.info("📂 Por favor, envie um arquivo CSV para começar.")
-
-with col_esq:
-    if uploaded_file and 'df_filtrado' in locals():
-        st.markdown("## 📈 Estatísticas e Gráfico de Classificação")
-
-        total_tickets = len(df_filtrado)
-        ideal_count = len(df_filtrado[df_filtrado['Análise'] == 'IDEAL'])
-        nao_ideal_count = len(df_filtrado[df_filtrado['Análise'] == 'NÃO IDEAL'])
-
-        # Mostrar zero caso não tenha dados
-        ideal_count = ideal_count if ideal_count > 0 else 0
-        nao_ideal_count = nao_ideal_count if nao_ideal_count > 0 else 0
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total de Tickets", total_tickets)
-        c2.metric(
-            "Tickets IDEAL", ideal_count,
-            delta=f"{(ideal_count / total_tickets * 100 if total_tickets else 0):.1f}%"
-        )
-        c3.metric(
-            "Tickets NÃO IDEAL", nao_ideal_count,
-            delta=f"{(nao_ideal_count / total_tickets * 100 if total_tickets else 0):.1f}%"
-        )
-
-        st.markdown("### 🥧 Proporção de Tickets IDEAL vs NÃO IDEAL")
-
-        analise_counts = df_filtrado['Análise'].value_counts().reset_index()
-        analise_counts.columns = ['Análise', 'Quantidade']
-
-        fig = px.pie(
-            analise_counts,
-            values='Quantidade',
-            names='Análise',
-            color='Análise',
-            color_discrete_map={'IDEAL': '#4CAF50', 'NÃO IDEAL': '#F44336'},
-            hole=0.4,
-            title="Proporção IDEAL x NÃO IDEAL"
-        )
-        fig.update_traces(textposition='inside', textinfo='percent+label')
-        fig.update_layout(margin=dict(t=40, b=40, l=40, r=40), height=350)
-
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.markdown("⚠️ Faça o upload de um arquivo CSV válido para visualizar estatísticas e gráfico.")
+else:
+    st.warning("⛔ Nenhum arquivo enviado. Por favor, envie o arquivo CSV para iniciar o dashboard.")
 
 
 
